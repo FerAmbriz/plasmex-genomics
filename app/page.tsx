@@ -19,15 +19,22 @@ import {
   type SequenceEntry,
 } from "../lib/genomics";
 import { EXAMPLE_DESCRIPTIONS, EXAMPLE_SEQUENCES } from "../lib/examples";
+import {
+  buildFingerprintPixels,
+  demoSequence,
+  validateAccession,
+} from "../lib/fingerprint";
+import FingerprintViewer from "../components/FingerprintViewer";
 import TreeView from "../components/TreeView";
 
-type Tab = "conteos" | "arbol" | "relaciones" | "regulacion";
+type Tab = "conteos" | "arbol" | "relaciones" | "regulacion" | "huella";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "conteos", label: "Conteos" },
   { id: "arbol", label: "Árbol filogenético" },
   { id: "relaciones", label: "Relaciones distantes" },
   { id: "regulacion", label: "Regulación" },
+  { id: "huella", label: "Huella RGB" },
 ];
 
 function heatColor(d: number, max: number): string {
@@ -41,6 +48,8 @@ export default function Home() {
   const [input, setInput] = useState(EXAMPLE_SEQUENCES[0].sequence);
   const [activeExample, setActiveExample] = useState(EXAMPLE_SEQUENCES[0].id);
   const [tab, setTab] = useState<Tab>("conteos");
+  const [accession, setAccession] = useState("NC_045512.2");
+  const [fingerprintMode, setFingerprintMode] = useState<"accession" | "secuencia">("accession");
 
   const invalid = useMemo(() => findInvalidChars(input), [input]);
   const seq = useMemo(() => cleanSequence(input), [input]);
@@ -51,6 +60,16 @@ export default function Home() {
   const motifs = useMemo(() => findMotifs(seq), [seq]);
   const orfs = useMemo(() => findOrfs(seq, 30), [seq]);
   const islands = useMemo(() => cpgIslands(seq), [seq]);
+
+  const accessionValid = useMemo(() => validateAccession(accession), [accession]);
+  const fingerprint = useMemo(() => {
+    if (fingerprintMode === "secuencia") {
+      if (seq.length === 0) return null;
+      return buildFingerprintPixels(seq);
+    }
+    if (!accessionValid) return null;
+    return buildFingerprintPixels(demoSequence(accession.trim().toUpperCase()));
+  }, [fingerprintMode, seq, accession, accessionValid]);
 
   const entries: SequenceEntry[] = useMemo(() => {
     const list = [...EXAMPLE_SEQUENCES];
@@ -89,7 +108,7 @@ export default function Home() {
         <p>
           Plataforma de procesamiento genómico básico. Pega una secuencia de ADN
           o usa un ejemplo sintético y explora sus patrones: conteos, árbol
-          filogenético, relaciones distantes y regulación. Todo el análisis se
+          filogenético, relaciones distantes, regulación y huella RGB. Todo el análisis se
           hace en tu navegador, sin enviar datos a ningún servidor.
         </p>
       </header>
@@ -288,6 +307,99 @@ export default function Home() {
                   ))}
                 </tbody>
               </table>
+            )}
+          </section>
+        )}
+
+        {tab === "huella" && (
+          <section className="card">
+            <h2>Huella Espectral RGB</h2>
+            <p className="muted">
+              Cada base es un píxel de color (A rojo, C azul, G verde, T
+              amarillo, N casi negro) con padding simétrico hasta formar una
+              matriz cuadrada. Es el mismo motor del proyecto Spectral RGB,
+              calculado en tu navegador.
+            </p>
+            <div>
+              <button
+                className={fingerprintMode === "accession" ? "secondary active" : "secondary"}
+                onClick={() => setFingerprintMode("accession")}
+              >
+                Desde accession (demo)
+              </button>
+              <button
+                className={fingerprintMode === "secuencia" ? "secondary active" : "secondary"}
+                onClick={() => setFingerprintMode("secuencia")}
+                disabled={seq.length === 0}
+              >
+                Desde tu secuencia
+              </button>
+            </div>
+            {fingerprintMode === "accession" && (
+              <>
+                <p className="muted">
+                  Demo determinista: la secuencia se genera a partir del
+                  accession (seed FNV-1a), así que el mismo accession siempre
+                  da la misma huella, pero no es la secuencia real de NCBI.
+                  Para la huella real hace falta el backend FastAPI.
+                </p>
+                <input
+                  type="text"
+                  value={accession}
+                  onChange={(e) => setAccession(e.target.value)}
+                  placeholder="NC_045512.2"
+                  aria-label="Accession ID de NCBI"
+                  style={{
+                    width: "100%",
+                    background: "#0a1322",
+                    color: "var(--text)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    padding: "0.75rem",
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: "0.85rem",
+                  }}
+                />
+                <div>
+                  {["NC_045512.2", "NC_000913.3", "NM_000546.6"].map((a) => (
+                    <button
+                      key={a}
+                      className={accession.toUpperCase() === a ? "secondary active" : "secondary"}
+                      onClick={() => setAccession(a)}
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
+                {!accessionValid && (
+                  <p className="error">Formato de accession no válido.</p>
+                )}
+              </>
+            )}
+            {fingerprintMode === "secuencia" && seq.length === 0 && (
+              <p>Escribe una secuencia arriba para generar su huella.</p>
+            )}
+            {fingerprint && (
+              <>
+                <FingerprintViewer
+                  fingerprint={fingerprint}
+                  label={fingerprintMode === "accession" ? accession.trim().toUpperCase() : "mi-secuencia"}
+                />
+                <div className="grid">
+                  <div><div className="stat">{fingerprint.lengthBp}</div><div className="stat-label">Longitud (nt)</div></div>
+                  <div><div className="stat">{fingerprint.side}×{fingerprint.side}</div><div className="stat-label">Matriz</div></div>
+                  <div><div className="stat">{fingerprint.gcPercent.toFixed(1)}%</div><div className="stat-label">Contenido GC</div></div>
+                  <div><div className="stat">{fingerprint.padLeft}+{fingerprint.padRight}</div><div className="stat-label">Padding (izq+der)</div></div>
+                </div>
+                <h3>Conteo de bases</h3>
+                {(["A", "T", "G", "C", "N"] as const).map((b) => (
+                  <div className="bar-row" key={b}>
+                    <span>{b}</span>
+                    <div className="bar" style={{ width: `${fingerprint.lengthBp ? (fingerprint.counts[b] / fingerprint.lengthBp) * 100 * 3 : 0}%` }} />
+                    <span>{fingerprint.counts[b]} ({fingerprint.lengthBp ? ((fingerprint.counts[b] / fingerprint.lengthBp) * 100).toFixed(1) : "0"}%)</span>
+                  </div>
+                ))}
+              </>
             )}
           </section>
         )}

@@ -22,6 +22,11 @@ sintéticos incluidos, y la plataforma muestra:
 4. **Regulación** — motivos de promotor (caja TATA, caja CAAT, caja GC),
    codones de inicio/parada, ORFs en ambas hebras e islas CpG. Son
    predicciones de patrones, no evidencia experimental.
+5. **Huella RGB** — huella espectral RGB de la secuencia (A rojo, C azul,
+   G verde, T amarillo, N casi negro) con padding simétrico en matriz
+   cuadrada, lectura de píxel al pasar el cursor y descarga PNG. Desde un
+   accession genera una demo determinista (no es la secuencia real de
+   NCBI); desde tu secuencia calcula la huella de lo que pegaste.
 
 ## Desarrollo local
 
